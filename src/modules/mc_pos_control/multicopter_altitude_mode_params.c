@@ -115,3 +115,17 @@ PARAM_DEFINE_FLOAT(MPC_HOLD_MAX_XY, 0.8f);
  * @group Multicopter Position Control
  */
 PARAM_DEFINE_FLOAT(MPC_HOLD_MAX_Z, 0.6f);
+
+/**
+ * Governor mode enable
+ *
+ * Governor mode spins the airframe at a constant yaw rate while the sticks
+ * steer relative to a fixed compass heading. Altitude mode only.
+ * 0 disables it completely, so the firmware behaves exactly like stock PX4.
+ *
+ * @value 0 Off
+ * @value 1 Governor switch (RC AUX1)
+ * @value 2 Always on (simulation and bench testing only)
+ * @group Governor
+ */
+PARAM_DEFINE_INT32(GOV_EN, 0);
