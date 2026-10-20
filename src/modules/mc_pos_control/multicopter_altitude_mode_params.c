@@ -129,3 +129,107 @@ PARAM_DEFINE_FLOAT(MPC_HOLD_MAX_Z, 0.6f);
  * @group Governor
  */
 PARAM_DEFINE_INT32(GOV_EN, 0);
+
+/**
+ * Governor spin rate
+ *
+ * Target spin rate while the governor is engaged. Enter it as a positive
+ * number; the airframe always spins counterclockwise seen from above
+ * (the code applies the sign).
+ *
+ * @unit deg/s
+ * @min 0
+ * @max 360
+ * @decimal 0
+ * @increment 5
+ * @group Governor
+ */
+PARAM_DEFINE_FLOAT(GOV_RATE, 180.0f);
+
+/**
+ * Governor spin-up acceleration limit
+ *
+ * Maximum rate at which the spin target increases when the governor engages.
+ * Keep it below what the airframe can follow (about 35 deg/s^2 measured).
+ *
+ * @unit deg/s^2
+ * @min 1
+ * @max 90
+ * @decimal 0
+ * @increment 1
+ * @group Governor
+ */
+PARAM_DEFINE_FLOAT(GOV_ACC_UP, 30.0f);
+
+/**
+ * Governor spin-down acceleration limit
+ *
+ * Maximum rate at which the spin target decreases when the governor
+ * disengages. Measured braking capacity is about 25 deg/s^2.
+ *
+ * @unit deg/s^2
+ * @min 1
+ * @max 90
+ * @decimal 0
+ * @increment 1
+ * @group Governor
+ */
+PARAM_DEFINE_FLOAT(GOV_ACC_DN, 25.0f);
+
+/**
+ * Governor reference heading mode
+ *
+ * Where the headless "forward" direction comes from.
+ * Only 0 is implemented so far.
+ *
+ * @value 0 Fixed heading (GOV_REF_HDG)
+ * @value 1 Nose heading captured when the governor engages
+ * @value 2 Nose heading captured at arming
+ * @group Governor
+ */
+PARAM_DEFINE_INT32(GOV_REF_MODE, 0);
+
+/**
+ * Governor reference heading
+ *
+ * Compass heading that forward stick points toward while the governor
+ * is engaged, when GOV_REF_MODE is 0.
+ *
+ * @unit deg
+ * @min 0
+ * @max 360
+ * @decimal 0
+ * @increment 1
+ * @group Governor
+ */
+PARAM_DEFINE_FLOAT(GOV_REF_HDG, 5.0f);
+
+/**
+ * Governor maximum cyclic tilt
+ *
+ * Tilt commanded at full roll/pitch stick while the governor is engaged.
+ * Keep at or below MPC_MAN_TILT_MAX.
+ *
+ * @unit deg
+ * @min 0
+ * @max 30
+ * @decimal 1
+ * @increment 0.5
+ * @group Governor
+ */
+PARAM_DEFINE_FLOAT(GOV_TILT_MAX, 10.0f);
+
+/**
+ * Governor exit rate
+ *
+ * During spin-down, once the yaw rate falls below this value the heading
+ * hold is reset to the current heading and normal Altitude mode resumes.
+ *
+ * @unit deg/s
+ * @min 1
+ * @max 45
+ * @decimal 0
+ * @increment 1
+ * @group Governor
+ */
+PARAM_DEFINE_FLOAT(GOV_EXIT_RATE, 10.0f);
