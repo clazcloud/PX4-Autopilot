@@ -289,8 +289,27 @@ void FlightTaskManualAltitude::_updateYawSetpoint()
 
 void FlightTaskManualAltitude::_updateXYSetpoint()
 {
-	_acceleration_setpoint.xy() = _stick_tilt_xy.generateAccelerationSetpoints(
-					      _sticks.getPitchRoll(), _deltatime, _yaw, _yaw_setpoint);
+	if (_gov_active) {
+		// Governor: headless tilt.
+		// Sticks steer relative to a fixed compass heading (GOV_REF_HDG), not the nose.
+		const float ref_heading = math::radians(_param_gov_ref_hdg.get());
+
+		// Scale sticks so full stick gives GOV_TILT_MAX instead of MPC_MAN_TILT_MAX.
+		// (Tilt angle maps to acceleration through tan(angle), hence tanf.)
+		const float normal_tilt = math::radians(math::max(_param_mpc_man_tilt_max.get(), 1.f));
+		const float gov_tilt = math::radians(_param_gov_tilt_max.get());
+		const float tilt_scale = tanf(gov_tilt) / tanf(normal_tilt);
+
+		const Vector2f stick = _sticks.getPitchRoll() * tilt_scale;
+
+		_acceleration_setpoint.xy() = _stick_tilt_xy.generateAccelerationSetpoints(
+						      stick, _deltatime, _yaw, ref_heading);
+
+	} else {
+		// Normal Altitude mode: sticks are relative to the nose.
+		_acceleration_setpoint.xy() = _stick_tilt_xy.generateAccelerationSetpoints(
+						      _sticks.getPitchRoll(), _deltatime, _yaw, _yaw_setpoint);
+	}
 }
 
 bool FlightTaskManualAltitude::_checkTakeoff()

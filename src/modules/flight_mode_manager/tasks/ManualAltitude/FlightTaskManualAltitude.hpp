@@ -103,7 +103,8 @@ protected:
 					(ParamInt<px4::params::GOV_REF_MODE>) _param_gov_ref_mode,
 					(ParamFloat<px4::params::GOV_REF_HDG>) _param_gov_ref_hdg,
 					(ParamFloat<px4::params::GOV_TILT_MAX>) _param_gov_tilt_max,
-					(ParamFloat<px4::params::GOV_EXIT_RATE>) _param_gov_exit_rate
+					(ParamFloat<px4::params::GOV_EXIT_RATE>) _param_gov_exit_rate,
+					(ParamFloat<px4::params::MPC_MAN_TILT_MAX>) _param_mpc_man_tilt_max
 				       )
 private:
 	/**
