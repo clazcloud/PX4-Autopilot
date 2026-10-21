@@ -314,7 +314,7 @@ bool FlightTaskManualAltitude::update()
 
 void FlightTaskManualAltitude::_updateGovernorRequest()
 {
-	// Read the governor switch (channel 8, mapped to AUX1)
+	// --- Input 1: the governor switch (channel 8, mapped to AUX1) ---
 	manual_control_setpoint_s manual_control_setpoint;
 	bool switch_on = false;
 
@@ -322,13 +322,36 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 		switch_on = manual_control_setpoint.valid && (manual_control_setpoint.aux1 > 0.5f);
 	}
 
-	// GOV_EN: 0 = off, 1 = switch controls it, 2 = always on (sim/bench)
+	// --- Input 2: GOV_EN (0 = off, 1 = switch, 2 = always on) ---
 	const int32_t gov_en = _param_gov_en.get();
 	const bool requested = (gov_en == 2) || (gov_en == 1 && switch_on);
 
-	// Only print when the answer changes, not every cycle
+	// --- Input 3: the current flight mode ---
+	vehicle_status_s vehicle_status;
+	bool altitude_mode = false;
+
+	if (_vehicle_status_sub.copy(&vehicle_status)) {
+		altitude_mode = (vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ALTCTL);
+	}
+
+	// --- Decision: active only when requested AND in Altitude mode ---
+	const bool active = requested && altitude_mode;
+	const bool blocked = requested && !altitude_mode;
+
+	// --- Messages, printed only when something changes ---
 	if (requested != _gov_requested) {
 		_gov_requested = requested;
 		PX4_INFO("Governor %s", requested ? "requested" : "released");
+	}
+
+	if (blocked && !_gov_blocked) {
+		PX4_WARN("Governor requested but only allowed in Altitude mode");
+	}
+
+	_gov_blocked = blocked;
+
+	if (active != _gov_active) {
+		_gov_active = active;
+		PX4_INFO("Governor %s", active ? "ACTIVE" : "inactive");
 	}
 }

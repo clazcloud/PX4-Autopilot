@@ -45,6 +45,7 @@
 #include "StickTiltXY.hpp"
 #include <uORB/Subscription.hpp>
 #include <uORB/topics/manual_control_setpoint.h>
+#include <uORB/topics/vehicle_status.h>
 
 class FlightTaskManualAltitude : public FlightTask
 {
@@ -150,5 +151,8 @@ private:
 	void _updateGovernorRequest(); /**< reads GOV_EN and the governor switch */
 
 	uORB::Subscription _manual_control_setpoint_sub{ORB_ID(manual_control_setpoint)};
+	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};
 	bool _gov_requested{false}; /**< true while the governor is requested */
+	bool _gov_blocked{false};   /**< true while requested outside Altitude mode */
+	bool _gov_active{false};    /**< true while the governor is actually in charge */
 };
