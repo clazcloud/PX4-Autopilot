@@ -302,6 +302,7 @@ bool FlightTaskManualAltitude::_checkTakeoff()
 bool FlightTaskManualAltitude::update()
 {
 	bool ret = FlightTask::update();
+	_updateGovernorRequest();
 	_updateConstraintsFromEstimator();
 	_scaleSticks();
 	_updateSetpoints();
@@ -309,4 +310,25 @@ bool FlightTaskManualAltitude::update()
 	_max_distance_to_ground = INFINITY;
 
 	return ret;
+}
+
+void FlightTaskManualAltitude::_updateGovernorRequest()
+{
+	// Read the governor switch (channel 8, mapped to AUX1)
+	manual_control_setpoint_s manual_control_setpoint;
+	bool switch_on = false;
+
+	if (_manual_control_setpoint_sub.copy(&manual_control_setpoint)) {
+		switch_on = manual_control_setpoint.valid && (manual_control_setpoint.aux1 > 0.5f);
+	}
+
+	// GOV_EN: 0 = off, 1 = switch controls it, 2 = always on (sim/bench)
+	const int32_t gov_en = _param_gov_en.get();
+	const bool requested = (gov_en == 2) || (gov_en == 1 && switch_on);
+
+	// Only print when the answer changes, not every cycle
+	if (requested != _gov_requested) {
+		_gov_requested = requested;
+		PX4_INFO("Governor %s", requested ? "requested" : "released");
+	}
 }

@@ -44,6 +44,7 @@
 #include "FlightTask.hpp"
 #include "StickTiltXY.hpp"
 #include <uORB/Subscription.hpp>
+#include <uORB/topics/manual_control_setpoint.h>
 
 class FlightTaskManualAltitude : public FlightTask
 {
@@ -93,7 +94,15 @@ protected:
 					(ParamFloat<px4::params::MPC_LAND_SPEED>)
 					_param_mpc_land_speed, /**< desired downwards speed when approaching the ground */
 					(ParamFloat<px4::params::MPC_TKO_SPEED>)
-					_param_mpc_tko_speed /**< desired upwards speed when still close to the ground */
+					_param_mpc_tko_speed, /**< desired upwards speed when still close to the ground */
+					(ParamInt<px4::params::GOV_EN>) _param_gov_en,
+					(ParamFloat<px4::params::GOV_RATE>) _param_gov_rate,
+					(ParamFloat<px4::params::GOV_ACC_UP>) _param_gov_acc_up,
+					(ParamFloat<px4::params::GOV_ACC_DN>) _param_gov_acc_dn,
+					(ParamInt<px4::params::GOV_REF_MODE>) _param_gov_ref_mode,
+					(ParamFloat<px4::params::GOV_REF_HDG>) _param_gov_ref_hdg,
+					(ParamFloat<px4::params::GOV_TILT_MAX>) _param_gov_tilt_max,
+					(ParamFloat<px4::params::GOV_EXIT_RATE>) _param_gov_exit_rate
 				       )
 private:
 	/**
@@ -137,4 +146,9 @@ private:
 	 * _dist_to_ground_lock.
 	 */
 	float _dist_to_ground_lock = NAN;
+
+	void _updateGovernorRequest(); /**< reads GOV_EN and the governor switch */
+
+	uORB::Subscription _manual_control_setpoint_sub{ORB_ID(manual_control_setpoint)};
+	bool _gov_requested{false}; /**< true while the governor is requested */
 };
