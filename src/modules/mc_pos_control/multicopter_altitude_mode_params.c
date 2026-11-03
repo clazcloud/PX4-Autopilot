@@ -124,8 +124,9 @@ PARAM_DEFINE_FLOAT(MPC_HOLD_MAX_Z, 0.6f);
  * 0 disables it completely, so the firmware behaves exactly like stock PX4.
  *
  * @value 0 Off
- * @value 1 Governor switch (RC AUX1)
- * @value 2 Always on (simulation and bench testing only)
+ * @value 1 Channel 8 switch (low normal, middle headless, high cyclic)
+ * @value 2 Force headless (simulation and bench testing only)
+ * @value 3 Force cyclic (simulation and bench testing only)
  * @group Governor
  */
 PARAM_DEFINE_INT32(GOV_EN, 0);
@@ -174,7 +175,7 @@ PARAM_DEFINE_FLOAT(GOV_ACC_UP, 30.0f);
  * @increment 1
  * @group Governor
  */
-PARAM_DEFINE_FLOAT(GOV_ACC_DN, 25.0f);
+PARAM_DEFINE_FLOAT(GOV_ACC_DN, 35.0f);
 
 /**
  * Governor reference heading mode

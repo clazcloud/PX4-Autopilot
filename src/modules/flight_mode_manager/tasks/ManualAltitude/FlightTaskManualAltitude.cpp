@@ -282,14 +282,26 @@ void FlightTaskManualAltitude::_updateSetpoints()
 
 void FlightTaskManualAltitude::_updateYawSetpoint()
 {
-	_stick_yaw.generateYawSetpoint(_yawspeed_setpoint, _yaw_setpoint,
-				       _sticks.getYawExpo(), _yaw, _deltatime,
-				       _unaided_yaw);
+	if (_gov_state == GovState::CYCLIC) {
+		// Governor spin: ignore the yaw stick and ramp toward the target rate.
+		// Counterclockwise seen from above is a negative yaw rate in PX4 (NED frame).
+		const float target_rate = -math::radians(_param_gov_rate.get());
+		const float max_change = math::radians(_param_gov_acc_up.get()) * _deltatime;
+		_gov_rate_sp = math::constrain(target_rate, _gov_rate_sp - max_change, _gov_rate_sp + max_change);
+
+		_yawspeed_setpoint = _gov_rate_sp;
+		_yaw_setpoint = NAN; // no heading lock while spinning
+
+	} else {
+		_stick_yaw.generateYawSetpoint(_yawspeed_setpoint, _yaw_setpoint,
+					       _sticks.getYawExpo(), _yaw, _deltatime,
+					       _unaided_yaw);
+	}
 }
 
 void FlightTaskManualAltitude::_updateXYSetpoint()
 {
-	if (_gov_active) {
+	if (_gov_state != GovState::OFF) {
 		// Governor: headless tilt.
 		// Sticks steer relative to a fixed compass heading (GOV_REF_HDG), not the nose.
 		const float ref_heading = math::radians(_param_gov_ref_hdg.get());
@@ -333,19 +345,42 @@ bool FlightTaskManualAltitude::update()
 
 void FlightTaskManualAltitude::_updateGovernorRequest()
 {
-	// --- Input 1: the governor switch (channel 8, mapped to AUX1) ---
+	// --- Input 1: channel 8 switch via AUX1 (-1 low, 0 middle, +1 high) ---
 	manual_control_setpoint_s manual_control_setpoint;
-	bool switch_on = false;
+	float aux1 = -1.f; // no valid data counts as switch low
 
-	if (_manual_control_setpoint_sub.copy(&manual_control_setpoint)) {
-		switch_on = manual_control_setpoint.valid && (manual_control_setpoint.aux1 > 0.5f);
+	if (_manual_control_setpoint_sub.copy(&manual_control_setpoint) && manual_control_setpoint.valid) {
+		aux1 = manual_control_setpoint.aux1;
 	}
 
-	// --- Input 2: GOV_EN (0 = off, 1 = switch, 2 = always on) ---
-	const int32_t gov_en = _param_gov_en.get();
-	const bool requested = (gov_en == 2) || (gov_en == 1 && switch_on);
+	// --- Input 2: GOV_EN decides what is being asked for ---
+	// 0 = off, 1 = switch, 2 = force headless, 3 = force cyclic
+	GovState requested = GovState::OFF;
 
-	// --- Input 3: the current flight mode ---
+	switch (_param_gov_en.get()) {
+	case 1:
+		if (aux1 > 0.5f) {
+			requested = GovState::CYCLIC;
+
+		} else if (aux1 > -0.5f) {
+			requested = GovState::HEADLESS;
+		}
+
+		break;
+
+	case 2:
+		requested = GovState::HEADLESS;
+		break;
+
+	case 3:
+		requested = GovState::CYCLIC;
+		break;
+
+	default:
+		break;
+	}
+
+	// --- Input 3: only allowed in Altitude mode ---
 	vehicle_status_s vehicle_status;
 	bool altitude_mode = false;
 
@@ -353,15 +388,7 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 		altitude_mode = (vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ALTCTL);
 	}
 
-	// --- Decision: active only when requested AND in Altitude mode ---
-	const bool active = requested && altitude_mode;
-	const bool blocked = requested && !altitude_mode;
-
-	// --- Messages, printed only when something changes ---
-	if (requested != _gov_requested) {
-		_gov_requested = requested;
-		PX4_INFO("Governor %s", requested ? "requested" : "released");
-	}
+	const bool blocked = (requested != GovState::OFF) && !altitude_mode;
 
 	if (blocked && !_gov_blocked) {
 		PX4_WARN("Governor requested but only allowed in Altitude mode");
@@ -369,8 +396,54 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 
 	_gov_blocked = blocked;
 
-	if (active != _gov_active) {
-		_gov_active = active;
-		PX4_INFO("Governor %s", active ? "ACTIVE" : "inactive");
+	if (!altitude_mode) {
+		requested = GovState::OFF;
+	}
+
+	// --- Rules: move at most one step per cycle ---
+	GovState new_state = _gov_state;
+
+	switch (_gov_state) {
+	case GovState::OFF:
+		if (requested != GovState::OFF) {
+			new_state = GovState::HEADLESS; // always enter through headless
+		}
+
+		break;
+
+	case GovState::HEADLESS:
+		if (requested == GovState::OFF) {
+			new_state = GovState::OFF;
+
+		} else if (requested == GovState::CYCLIC) {
+			new_state = GovState::CYCLIC;
+		}
+
+		break;
+
+	case GovState::CYCLIC:
+		if (requested != GovState::CYCLIC) {
+			new_state = GovState::HEADLESS; // always leave back to headless
+		}
+
+		break;
+	}
+
+	// --- Act on a change of state ---
+	if (new_state != _gov_state) {
+		if (new_state == GovState::CYCLIC) {
+			// Start the spin ramp from the yaw rate currently being commanded
+			_gov_rate_sp = _yawspeed_setpoint;
+		}
+
+		if (_gov_state == GovState::CYCLIC) {
+			// Leaving the spin: restart normal yaw handling from the current heading
+			_stick_yaw.reset(_yaw, _unaided_yaw);
+		}
+
+		_gov_state = new_state;
+
+		PX4_INFO("Governor: %s", (new_state == GovState::OFF) ? "OFF" :
+			 (new_state == GovState::HEADLESS) ? "HEADLESS" : "CYCLIC");
 	}
 }
