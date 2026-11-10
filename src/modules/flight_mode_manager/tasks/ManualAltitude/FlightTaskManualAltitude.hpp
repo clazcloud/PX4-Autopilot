@@ -46,6 +46,7 @@
 #include <uORB/Subscription.hpp>
 #include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/vehicle_angular_velocity.h>
 
 class FlightTaskManualAltitude : public FlightTask
 {
@@ -155,11 +156,15 @@ private:
 	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};
 	bool _gov_blocked{false};   /**< true while requested outside Altitude mode */
 	enum class GovState {
-		OFF,      // normal Altitude mode
-		HEADLESS, // sticks fixed to the compass
-		CYCLIC    // headless plus constant spin
+		OFF,       // normal Altitude mode
+		HEADLESS,  // sticks fixed to the compass
+		CYCLIC,    // headless plus constant spin
+		SPIN_DOWN  // headless, spin ramping down to zero
 	};
 
 	GovState _gov_state{GovState::OFF}; /**< current governor state */
 	float _gov_rate_sp{0.f};            /**< ramped spin rate target [rad/s] */
+	float _gov_measured_rate{0.f};      /**< measured yaw rate [rad/s] */
+
+	uORB::Subscription _vehicle_angular_velocity_sub{ORB_ID(vehicle_angular_velocity)};
 };

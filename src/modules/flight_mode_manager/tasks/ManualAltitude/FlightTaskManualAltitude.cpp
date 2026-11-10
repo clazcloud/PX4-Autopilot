@@ -282,15 +282,22 @@ void FlightTaskManualAltitude::_updateSetpoints()
 
 void FlightTaskManualAltitude::_updateYawSetpoint()
 {
-	if (_gov_state == GovState::CYCLIC) {
-		// Governor spin: ignore the yaw stick and ramp toward the target rate.
+	if (_gov_state == GovState::CYCLIC || _gov_state == GovState::SPIN_DOWN) {
+		// Governor owns yaw: ramp the spin rate and ignore the yaw stick.
 		// Counterclockwise seen from above is a negative yaw rate in PX4 (NED frame).
-		const float target_rate = -math::radians(_param_gov_rate.get());
-		const float max_change = math::radians(_param_gov_acc_up.get()) * _deltatime;
+		float target_rate = 0.f;                               // spin-down: toward zero
+		float accel = math::radians(_param_gov_acc_dn.get());
+
+		if (_gov_state == GovState::CYCLIC) {
+			target_rate = -math::radians(_param_gov_rate.get()); // spin-up: toward -GOV_RATE
+			accel = math::radians(_param_gov_acc_up.get());
+		}
+
+		const float max_change = accel * _deltatime;
 		_gov_rate_sp = math::constrain(target_rate, _gov_rate_sp - max_change, _gov_rate_sp + max_change);
 
 		_yawspeed_setpoint = _gov_rate_sp;
-		_yaw_setpoint = NAN; // no heading lock while spinning
+		_yaw_setpoint = NAN; // no heading lock while the governor owns yaw
 
 	} else {
 		_stick_yaw.generateYawSetpoint(_yawspeed_setpoint, _yaw_setpoint,
@@ -298,7 +305,6 @@ void FlightTaskManualAltitude::_updateYawSetpoint()
 					       _unaided_yaw);
 	}
 }
-
 void FlightTaskManualAltitude::_updateXYSetpoint()
 {
 	if (_gov_state != GovState::OFF) {
@@ -400,6 +406,13 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 		requested = GovState::OFF;
 	}
 
+	// --- Input 4: measured yaw rate (body z, close to earth vertical at small tilt) ---
+	vehicle_angular_velocity_s angular_velocity;
+
+	if (_vehicle_angular_velocity_sub.copy(&angular_velocity)) {
+		_gov_measured_rate = angular_velocity.xyz[2];
+	}
+
 	// --- Rules: move at most one step per cycle ---
 	GovState new_state = _gov_state;
 
@@ -423,27 +436,40 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 
 	case GovState::CYCLIC:
 		if (requested != GovState::CYCLIC) {
-			new_state = GovState::HEADLESS; // always leave back to headless
+			new_state = GovState::SPIN_DOWN; // always slow down before leaving the spin
 		}
 
+		break;
+
+	case GovState::SPIN_DOWN: {
+			const float exit_rate = math::radians(_param_gov_exit_rate.get());
+			const bool finished = (fabsf(_gov_rate_sp) < 0.01f) && (fabsf(_gov_measured_rate) < exit_rate);
+
+			if (requested == GovState::CYCLIC) {
+				new_state = GovState::CYCLIC; // spin back up from wherever it is
+
+			} else if (finished) {
+				new_state = GovState::HEADLESS;
+			}
+		}
 		break;
 	}
 
 	// --- Act on a change of state ---
 	if (new_state != _gov_state) {
-		if (new_state == GovState::CYCLIC) {
-			// Start the spin ramp from the yaw rate currently being commanded
-			_gov_rate_sp = _yawspeed_setpoint;
+		if (new_state == GovState::CYCLIC || new_state == GovState::SPIN_DOWN) {
+			// Start every ramp from the yaw rate the airframe actually has
+			_gov_rate_sp = _gov_measured_rate;
 		}
 
-		if (_gov_state == GovState::CYCLIC) {
-			// Leaving the spin: restart normal yaw handling from the current heading
+		if (_gov_state == GovState::SPIN_DOWN && new_state == GovState::HEADLESS) {
+			// Spin finished: restart normal yaw handling from the current heading (no stale target)
 			_stick_yaw.reset(_yaw, _unaided_yaw);
 		}
 
 		_gov_state = new_state;
 
-		PX4_INFO("Governor: %s", (new_state == GovState::OFF) ? "OFF" :
-			 (new_state == GovState::HEADLESS) ? "HEADLESS" : "CYCLIC");
+		const char *names[] = {"OFF", "HEADLESS", "CYCLIC", "SPIN_DOWN"};
+		PX4_INFO("Governor: %s", names[static_cast<int>(new_state)]);
 	}
 }
