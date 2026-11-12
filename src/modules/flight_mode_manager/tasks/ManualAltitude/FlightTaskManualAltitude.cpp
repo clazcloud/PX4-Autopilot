@@ -346,6 +346,14 @@ bool FlightTaskManualAltitude::update()
 	_constraints.want_takeoff = _checkTakeoff();
 	_max_distance_to_ground = INFINITY;
 
+	governor_status_s gov_status{};
+	gov_status.state = static_cast<uint8_t>(_gov_state);
+	gov_status.yawspeed_sp = _gov_rate_sp;
+	gov_status.yawspeed_measured = _gov_measured_rate;
+	gov_status.ref_heading = math::radians(_param_gov_ref_hdg.get());
+	gov_status.timestamp = hrt_absolute_time();
+	_governor_status_pub.publish(gov_status);
+
 	return ret;
 }
 

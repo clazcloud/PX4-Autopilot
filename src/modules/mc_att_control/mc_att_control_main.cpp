@@ -251,6 +251,12 @@ MulticopterAttitudeControl::Run()
 		/* check for updates in other topics */
 		_manual_control_setpoint_sub.update(&_manual_control_setpoint);
 		_vehicle_control_mode_sub.update(&_vehicle_control_mode);
+		// Burl governor: body-axis yaw feed-forward while governor is active.
+		// Timeout = safety: if the flight task stops publishing (mode change), fall back to stock.
+		_governor_status_sub.update(&_governor_status);
+		const bool gov_active = (_governor_status.state != governor_status_s::STATE_OFF)
+					&& (hrt_elapsed_time(&_governor_status.timestamp) < 200_ms);
+		_attitude_control.setSpinFeedForwardBodyAxis(gov_active);
 
 		if (_vehicle_status_sub.updated()) {
 			vehicle_status_s vehicle_status;

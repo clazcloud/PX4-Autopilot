@@ -47,6 +47,8 @@
 #include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/vehicle_angular_velocity.h>
+#include <uORB/Publication.hpp>
+#include <uORB/topics/governor_status.h>
 
 class FlightTaskManualAltitude : public FlightTask
 {
@@ -167,4 +169,5 @@ private:
 	float _gov_measured_rate{0.f};      /**< measured yaw rate [rad/s] */
 
 	uORB::Subscription _vehicle_angular_velocity_sub{ORB_ID(vehicle_angular_velocity)};
+	uORB::Publication<governor_status_s> _governor_status_pub{ORB_ID(governor_status)};
 };

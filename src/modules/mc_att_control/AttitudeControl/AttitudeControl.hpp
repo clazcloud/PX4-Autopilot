@@ -71,6 +71,11 @@ public:
 	void setRateLimit(const matrix::Vector3f &rate_limit) { _rate_limit = rate_limit; }
 
 	/**
+	* Burl governor: apply yaw feed-forward about body z instead of earth z
+	*/
+	void setSpinFeedForwardBodyAxis(bool enable) { _spin_ff_body_axis = enable; }
+
+	/**
 	 * Set a new attitude setpoint replacing the one tracked before
 	 * @param qd desired vehicle attitude setpoint
 	 * @param yawspeed_setpoint [rad/s] yaw feed forward angular rate in world frame
@@ -107,4 +112,5 @@ private:
 
 	matrix::Quatf _attitude_setpoint_q; ///< latest known attitude setpoint e.g. from position control
 	float _yawspeed_setpoint{0.f}; ///< latest known yawspeed feed-forward setpoint
+	bool _spin_ff_body_axis{false}; ///< Burl governor active: feed-forward about body z
 };
