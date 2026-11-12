@@ -180,15 +180,16 @@ PARAM_DEFINE_FLOAT(GOV_ACC_DN, 35.0f);
 /**
  * Governor reference heading mode
  *
- * Where the headless "forward" direction comes from.
- * Only 0 is implemented so far.
+ * Where the headless "forward" direction comes from. The reference is
+ * latched when the governor engages and never changes mid-flight.
+ * The governor refuses to engage if no trusted reference is available.
  *
  * @value 0 Fixed heading (GOV_REF_HDG)
  * @value 1 Nose heading captured when the governor engages
- * @value 2 Nose heading captured at arming
+ * @value 2 Nose heading captured at arming (needs a position estimate)
  * @group Governor
  */
-PARAM_DEFINE_INT32(GOV_REF_MODE, 0);
+PARAM_DEFINE_INT32(GOV_REF_MODE, 2);
 
 /**
  * Governor reference heading

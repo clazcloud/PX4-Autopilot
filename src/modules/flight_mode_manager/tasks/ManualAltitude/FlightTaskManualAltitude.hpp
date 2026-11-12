@@ -49,6 +49,7 @@
 #include <uORB/topics/vehicle_angular_velocity.h>
 #include <uORB/Publication.hpp>
 #include <uORB/topics/governor_status.h>
+#include <uORB/topics/home_position.h>
 
 class FlightTaskManualAltitude : public FlightTask
 {
@@ -170,4 +171,7 @@ private:
 
 	uORB::Subscription _vehicle_angular_velocity_sub{ORB_ID(vehicle_angular_velocity)};
 	uORB::Publication<governor_status_s> _governor_status_pub{ORB_ID(governor_status)};
+	uORB::Subscription _home_position_sub{ORB_ID(home_position)};
+	float _gov_ref_heading{NAN};   ///< [rad] reference heading in use, latched on engage
+	bool _gov_no_ref_warned{false};
 };

@@ -264,6 +264,12 @@ void FlightTaskManualAltitude::_ekfResetHandlerHeading(float delta_psi)
 		_yaw_setpoint = wrap_pi(_yaw_setpoint + delta_psi);
 	}
 
+	// Governor: modes 1/2 store a physical direction, so shift it with the estimator.
+	// Mode 0 is a true compass bearing, so it stays put.
+	if (_param_gov_ref_mode.get() != 0 && PX4_ISFINITE(_gov_ref_heading)) {
+		_gov_ref_heading = wrap_pi(_gov_ref_heading + delta_psi);
+	}
+
 	_stick_yaw.ekfResetHandler(delta_psi);
 }
 
@@ -310,7 +316,7 @@ void FlightTaskManualAltitude::_updateXYSetpoint()
 	if (_gov_state != GovState::OFF) {
 		// Governor: headless tilt.
 		// Sticks steer relative to a fixed compass heading (GOV_REF_HDG), not the nose.
-		const float ref_heading = math::radians(_param_gov_ref_hdg.get());
+		const float ref_heading = _gov_ref_heading;
 
 		// Scale sticks so full stick gives GOV_TILT_MAX instead of MPC_MAN_TILT_MAX.
 		// (Tilt angle maps to acceleration through tan(angle), hence tanf.)
@@ -350,7 +356,7 @@ bool FlightTaskManualAltitude::update()
 	gov_status.state = static_cast<uint8_t>(_gov_state);
 	gov_status.yawspeed_sp = _gov_rate_sp;
 	gov_status.yawspeed_measured = _gov_measured_rate;
-	gov_status.ref_heading = math::radians(_param_gov_ref_hdg.get());
+	gov_status.ref_heading = _gov_ref_heading;
 	gov_status.timestamp = hrt_absolute_time();
 	_governor_status_pub.publish(gov_status);
 
@@ -421,6 +427,53 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 		_gov_measured_rate = angular_velocity.xyz[2];
 	}
 
+	// --- Input 5: reference heading, chosen while OFF (or disarmed), latched on engage ---
+	vehicle_status_s status_for_ref{};
+	_vehicle_status_sub.copy(&status_for_ref);
+	const bool armed = (status_for_ref.arming_state == vehicle_status_s::ARMING_STATE_ARMED);
+
+	if (_gov_state == GovState::OFF || !armed) {
+		float candidate = NAN;
+
+		switch (_param_gov_ref_mode.get()) {
+		case 1: // nose heading now; latched the moment the governor engages
+			candidate = _yaw;
+			break;
+
+		case 2: { // heading at arming, recorded by commander in home_position
+				home_position_s home;
+
+				if (_home_position_sub.copy(&home) && home.valid_lpos) {
+					candidate = home.yaw;
+				}
+			}
+			break;
+
+		default: // 0: fixed compass heading
+			candidate = math::radians(_param_gov_ref_hdg.get());
+			break;
+		}
+
+		// Any reference is meaningless if the heading estimate itself isn't trusted
+		const bool heading_good = _sub_vehicle_local_position.get().heading_good_for_control;
+		_gov_ref_heading = (heading_good && PX4_ISFINITE(_yaw)) ? candidate : NAN;
+	}
+
+	// No trusted reference: refuse to engage
+	const bool refuse = (_gov_state == GovState::OFF) && (requested != GovState::OFF)
+			    && !PX4_ISFINITE(_gov_ref_heading);
+
+	if (refuse && !_gov_no_ref_warned) {
+		PX4_WARN("Governor: no trusted reference heading (GOV_REF_MODE %d), not engaging",
+			 (int)_param_gov_ref_mode.get());
+	}
+
+	_gov_no_ref_warned = refuse;
+
+	if (refuse) {
+		requested = GovState::OFF;
+	}
+
 	// --- Rules: move at most one step per cycle ---
 	GovState new_state = _gov_state;
 
@@ -473,6 +526,10 @@ void FlightTaskManualAltitude::_updateGovernorRequest()
 		if (_gov_state == GovState::SPIN_DOWN && new_state == GovState::HEADLESS) {
 			// Spin finished: restart normal yaw handling from the current heading (no stale target)
 			_stick_yaw.reset(_yaw, _unaided_yaw);
+		}
+
+		if (_gov_state == GovState::OFF) {
+			PX4_INFO("Governor: reference heading %.1f deg", (double)math::degrees(_gov_ref_heading));
 		}
 
 		_gov_state = new_state;
